@@ -8,18 +8,37 @@ st.set_page_config(layout="wide")
 
 # === Sidebar Parameters ===
 st.sidebar.header("Detection Settings")
-threshold = st.sidebar.slider("Match Threshold", 50, 100, 80) / 100
-strict_rotation = st.sidebar.checkbox("Strict Rotation (Only 0°)", value=True)
-multi_scale = st.sidebar.checkbox("Detect All Sizes", value=True)
-show_template = st.sidebar.checkbox("Show ROI Template Preview", value=True)
-enable_color_filter = st.sidebar.checkbox("Enable HSV Color Filter", value=False)
-color_tolerance = st.sidebar.slider("Hue Tolerance (HSV)", 0, 100, 15)
+
+mode = st.sidebar.radio(
+    "Select Detection Mode",
+    ["Template Matching", "Circle Detection"]
+)
+
+threshold = st.sidebar.slider("Detection Threshold", 0.0, 1.0, 0.8, 0.01)
+
+multi_scale = st.sidebar.checkbox("Detect all sizes", value=True)
+allow_rotation = st.sidebar.checkbox("Detect rotated objects", value=True)
+enable_color_filter = st.sidebar.checkbox("Enable color filtering", value=False)
+color_tolerance = st.sidebar.slider("Color Tolerance (±)", 0, 50, 15, disabled=not enable_color_filter)
+
+with st.sidebar.expander("👨‍💻 Expert Mode (OpenCV settings)"):
+    method_name = st.selectbox(
+        "Template Matching Method",
+        ["TM_CCOEFF_NORMED", "TM_CCORR_NORMED", "TM_SQDIFF_NORMED"]
+    )
+    method_map = {
+        "TM_CCOEFF_NORMED": cv2.TM_CCOEFF_NORMED,
+        "TM_CCORR_NORMED": cv2.TM_CCORR_NORMED,
+        "TM_SQDIFF_NORMED": cv2.TM_SQDIFF_NORMED
+    }
+    method = method_map[method_name]
+    use_edges = st.checkbox("Use Edge-Based Matching (Canny)", value=False)
 
 resize_width = 800
 scales = [1.2, 1.0, 0.8, 0.6, 0.4] if multi_scale else [1.0]
 
 # === Image Upload ===
-st.title("🔍 Object Counting App with ROI & HSV Color Filtering")
+st.title("🔍 Universal Object Detection & Counting")
 
 uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
 if uploaded_file:
@@ -41,10 +60,14 @@ if uploaded_file:
         height=image_np.shape[0],
         width=image_np.shape[1],
         drawing_mode="rect",
-        key="canvas"
+        key="canvas",
+        initial_drawing={"version": "4.4.0", "objects": []}  # ensures clearing previous ROI
     )
 
     if canvas_result.json_data and len(canvas_result.json_data["objects"]) > 0:
+        # always take only the latest ROI and discard previous ones
+        canvas_result.json_data["objects"] = [canvas_result.json_data["objects"][-1]]
+
         rect = canvas_result.json_data["objects"][-1]
         x, y = int(rect["left"]), int(rect["top"])
         w, h = int(rect["width"]), int(rect["height"])
@@ -53,96 +76,80 @@ if uploaded_file:
         if template.size == 0:
             st.warning("⚠️ Invalid ROI selected.")
         else:
-            selected_color = None
+            st.image(template, caption="Selected ROI Template", width=200)
+            st.subheader("Step 2: Object Detection")
 
-            if enable_color_filter:
-                st.subheader("Step 2: Click Inside ROI to Select Color")
-                click_canvas = st_canvas(
-                    background_image=Image.fromarray(template),
-                    update_streamlit=True,
-                    height=template.shape[0],
-                    width=template.shape[1],
-                    drawing_mode="transform",
-                    key="color_pick"
-                )
-
-                if click_canvas.json_data and len(click_canvas.json_data["objects"]) > 0:
-                    click_obj = click_canvas.json_data["objects"][-1]
-                    cx = int(click_obj["left"])
-                    cy = int(click_obj["top"])
-                    if 0 <= cx < template.shape[1] and 0 <= cy < template.shape[0]:
-                        selected_color = template[cy, cx]
-                        st.markdown(f"🎯 Selected Color (RGB): {tuple(selected_color)}")
-                        st.color_picker("Preview", value='#%02x%02x%02x' % tuple(selected_color), key="color_preview")
-
-            if show_template:
-                st.image(template, caption="Selected ROI Template", width=200)
-
-            st.subheader("Step 3: Object Detection")
-
-            def rgb_to_hsv(color):
-                color = np.uint8([[color]])
-                hsv = cv2.cvtColor(color, cv2.COLOR_RGB2HSV)
-                return hsv[0][0]
-
-            def hsv_distance(hsv1, hsv2):
-                """Compare only the Hue component."""
-                hue_diff = abs(int(hsv1[0]) - int(hsv2[0]))
-                return hue_diff
-
-            def match_objects(img, template, threshold, strict, scales, selected_color=None, color_tol=15):
+            # === Detection functions ===
+            def detect_template(img, template):
                 result_img = img.copy()
                 found_rects = []
-                angles = [0] if strict else [0, 180]
+                angles = [0] if not allow_rotation else list(range(0, 360, 15))
 
-                selected_hsv = rgb_to_hsv(selected_color) if selected_color is not None else None
+                selected_hsv = None
+                if enable_color_filter:
+                    avg_color = cv2.mean(template)[:3]
+                    selected_hsv = cv2.cvtColor(np.uint8([[avg_color]]), cv2.COLOR_RGB2HSV)[0][0]
 
                 for scale in scales:
                     resized_template = cv2.resize(template, (0, 0), fx=scale, fy=scale)
                     for angle in angles:
                         center = (resized_template.shape[1] // 2, resized_template.shape[0] // 2)
                         rot_mat = cv2.getRotationMatrix2D(center, angle, 1.0)
-                        rotated = cv2.warpAffine(resized_template, rot_mat,
-                                                 (resized_template.shape[1], resized_template.shape[0]))
+                        rotated = cv2.warpAffine(resized_template, rot_mat, (resized_template.shape[1], resized_template.shape[0]))
 
-                        res = cv2.matchTemplate(img, rotated, cv2.TM_CCOEFF_NORMED)
-                        loc = np.where(res >= threshold)
+                        if use_edges:
+                            img_proc = cv2.Canny(cv2.cvtColor(img, cv2.COLOR_RGB2GRAY), 50, 150)
+                            rotated_proc = cv2.Canny(cv2.cvtColor(rotated, cv2.COLOR_RGB2GRAY), 50, 150)
+                        else:
+                            img_proc = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+                            rotated_proc = cv2.cvtColor(rotated, cv2.COLOR_RGB2GRAY)
+
+                        res = cv2.matchTemplate(img_proc, rotated_proc, method)
+                        loc = np.where(res >= threshold) if method != cv2.TM_SQDIFF_NORMED else np.where(res <= (1 - threshold))
 
                         for pt in zip(*loc[::-1]):
                             region = img[pt[1]:pt[1]+rotated.shape[0], pt[0]:pt[0]+rotated.shape[1]]
-                            if region.shape[:2] == rotated.shape[:2]:
-                                if selected_hsv is not None:
-                                    region_hsv = cv2.cvtColor(region, cv2.COLOR_RGB2HSV)
-                                    h1, h2 = int(region_hsv.shape[0]*0.25), int(region_hsv.shape[0]*0.75)
-                                    w1, w2 = int(region_hsv.shape[1]*0.25), int(region_hsv.shape[1]*0.75)
-                                    center_hsv = region_hsv[h1:h2, w1:w2]
-                                    avg_hsv = center_hsv.mean(axis=(0, 1))
+                            if region.shape[:2] != rotated.shape[:2]:
+                                continue
+                            if selected_hsv is not None:
+                                cy, cx = region.shape[0]//2, region.shape[1]//2
+                                region_hsv = cv2.cvtColor(region, cv2.COLOR_RGB2HSV)
+                                center_hsv = region_hsv[cy, cx]
+                                h_diff = min(abs(int(center_hsv[0]) - int(selected_hsv[0])), 180 - abs(int(center_hsv[0]) - int(selected_hsv[0])))
+                                if h_diff > color_tolerance:
+                                    continue
+                            found_rects.append([pt[0], pt[1], rotated.shape[1], rotated.shape[0]])
 
-                                    hue_diff = hsv_distance(avg_hsv, selected_hsv)
-
-                                    # Reject grayscale or dark objects
-                                    if hue_diff > color_tol or avg_hsv[1] < 30 or avg_hsv[2] < 40:
-                                        continue
-
-                                found_rects.append([pt[0], pt[1], rotated.shape[1], rotated.shape[0]])
-
-                # Group similar rectangles
                 final_boxes, _ = cv2.groupRectangles(found_rects, 1, 0.5)
                 for i, (x, y, rw, rh) in enumerate(final_boxes):
-                    cv2.rectangle(result_img, (x, y), (x + rw, y + rh), (0, 255, 0), 2)
-                    cv2.putText(result_img, f"{i+1}", (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-
+                    cv2.rectangle(result_img, (x, y), (x+rw, y+rh), (0,255,0), 2)
+                    cv2.putText(result_img, f"{i+1}", (x, y-10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
                 return result_img, len(final_boxes)
 
-            result, count = match_objects(
-                image_np, template, threshold,
-                strict_rotation, scales,
-                selected_color=selected_color if enable_color_filter else None,
-                color_tol=color_tolerance
-            )
+            def detect_circles(img, template):
+                result_img = img.copy()
+                gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+                roi_gray = cv2.cvtColor(template, cv2.COLOR_RGB2GRAY)
+                roi_radius = int(min(template.shape[:2]) / 2)
+                circles = cv2.HoughCircles(gray, cv2.HOUGH_GRADIENT, dp=1.2, minDist=roi_radius,
+                                           param1=50, param2=30,
+                                           minRadius=int(roi_radius*0.8), maxRadius=int(roi_radius*1.2))
+                count = 0
+                if circles is not None:
+                    circles = np.uint16(np.around(circles))
+                    for i, (x, y, r) in enumerate(circles[0, :]):
+                        cv2.circle(result_img, (x, y), r, (0, 255, 0), 2)
+                        cv2.putText(result_img, f"{i+1}", (x-r, y-r), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
+                        count += 1
+                return result_img, count
+
+            # === Mode Selection ===
+            if mode == "Template Matching":
+                result, count = detect_template(image_np, template)
+            elif mode == "Circle Detection":
+                result, count = detect_circles(image_np, template)
 
             st.success(f"✅ Total Objects Detected: {count}")
             st.image(result, caption="Detection Result", width=800)
-
     else:
         st.info("✏️ Draw a rectangle ROI on the image above.")
