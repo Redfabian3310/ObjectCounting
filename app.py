@@ -122,7 +122,7 @@ if uploaded_file:
     st.subheader("Step 1: (Optional) Draw ROI Box for Template / Color Filter")
 
     rgb_img = cv2.cvtColor(display_img, cv2.COLOR_BGR2RGB)
-    background_image = Image.fromarray(rgb_img)
+    
     st.image(rgb_img, caption="Check background image", channels="RGB")
     canvas_result = st_canvas(
         fill_color="rgba(0, 0, 0, 0)",
