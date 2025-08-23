@@ -1,7 +1,6 @@
 import streamlit as st
 import cv2
 import numpy as np
-from streamlit_drawable_canvas import st_canvas
 from PIL import Image
 
 st.set_page_config(layout="wide")
@@ -90,32 +89,31 @@ if uploaded_file:
         display_img = original.copy()
 
     st.subheader("Step 1: (Optional) Draw ROI Box for Template / Color Filter")
-    canvas_result = st_canvas(
-        fill_color="rgba(0, 0, 0, 0)",
-        stroke_width=3,
-        stroke_color="#00FF00",
-        background_image=Image.fromarray(display_img),
-        update_streamlit=True,
-        height=display_img.shape[0],
-        width=display_img.shape[1],
-        drawing_mode="rect",
-        key="canvas",
-        initial_drawing={"version": "4.4.0", "objects": []}
-    )
-
-    template = None
-    if canvas_result.json_data and len(canvas_result.json_data["objects"]) > 0:
-        # Keep only the latest ROI
-        rect = canvas_result.json_data["objects"][-1]
-        x, y = int(rect["left"]), int(rect["top"])
-        w, h = int(rect["width"]), int(rect["height"])
-
-        # Map ROI back to original coordinates
-        x, y, w, h = int(x / scale_factor), int(y / scale_factor), int(w / scale_factor), int(h / scale_factor)
-
-        template = original[y:y+h, x:x+w]
-        if template.size > 0:
-            st.image(template, caption="Selected ROI Template", width=200)
+    
+    # Display the image for reference
+    st.image(display_img, caption="Uploaded Image", use_column_width=True)
+    
+    # Get ROI coordinates using sliders
+    col1, col2 = st.columns(2)
+    with col1:
+        x = st.slider("X coordinate", 0, display_img.shape[1]-1, 0)
+        y = st.slider("Y coordinate", 0, display_img.shape[0]-1, 0)
+    with col2:
+        width = st.slider("Width", 1, display_img.shape[1]-x, min(100, display_img.shape[1]-x))
+        height = st.slider("Height", 1, display_img.shape[0]-y, min(100, display_img.shape[0]-y))
+    
+    # Draw rectangle on the image to show the selected ROI
+    roi_img = display_img.copy()
+    cv2.rectangle(roi_img, (x, y), (x+width, y+height), (0, 255, 0), 2)
+    st.image(roi_img, caption="Selected ROI", use_column_width=True)
+    
+    # Map ROI back to original coordinates
+    x_orig, y_orig = int(x / scale_factor), int(y / scale_factor)
+    width_orig, height_orig = int(width / scale_factor), int(height / scale_factor)
+    
+    template = original[y_orig:y_orig+height_orig, x_orig:x_orig+width_orig]
+    if template.size > 0:
+        st.image(template, caption="Selected ROI Template", width=200)
 
     st.subheader("Step 2: Object Detection")
 
@@ -254,7 +252,7 @@ if uploaded_file:
     # === Run Detection ===
     if mode == "Template Matching":
         if template is None:
-            st.warning("⚠️ Please draw an ROI for template matching.")
+            st.warning("⚠️ Please select an ROI for template matching.")
         else:
             result, count = detect_template(original, template)  # use ORIGINAL
             st.success(f"✅ Total Objects Detected: {count}")
