@@ -3,7 +3,7 @@ import cv2
 import numpy as np
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
-
+st.write("Streamlit version:", st.__version__)
 st.set_page_config(layout="wide")
 
 # === Sidebar Parameters ===
