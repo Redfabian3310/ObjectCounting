@@ -1,5 +1,5 @@
 # Streamlit version compatible with streamlit-drawable-canvas 0.9.3
-streamlit==1.28.0
+streamlit==1.29.0
 
 # Canvas library version that works with Streamlit 1.28
 streamlit-drawable-canvas==0.9.3
