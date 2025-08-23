@@ -121,7 +121,6 @@ if uploaded_file:
     # === Step 1: ROI Selection ===
     st.subheader("Step 1: (Optional) Draw ROI Box for Template / Color Filter")
 
-    display_img = cv2.cvtColor(display_img, cv2.COLOR_BGR2RGB)  # force proper RGB
     background_image = Image.fromarray(display_img.astype("uint8")).convert("RGB")
 
     canvas_result = st_canvas(
@@ -133,7 +132,7 @@ if uploaded_file:
         height=display_img.shape[0],
         width=display_img.shape[1],
         drawing_mode="rect",
-        key=f"canvas_{uploaded_file.name}"
+        key=f"canvas_{uploaded_file.name}"  # ensures ROI resets when new file is uploaded
     )
 
     template = None
