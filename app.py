@@ -5,7 +5,7 @@ from streamlit_drawable_canvas import st_canvas
 from PIL import Image
 
 st.set_page_config(layout="wide")
-st.write("Streamlit version:", st.__version__)
+
 # === Sidebar Parameters ===
 st.sidebar.header("Detection Settings")
 
@@ -54,49 +54,20 @@ with st.sidebar.expander("⚙️ Circle Detection Settings"):
         hough_param2 = st.slider("param2 (Accumulator Threshold)", 10, 100, 30)
 
 # === Tips Section ===
-with st.sidebar.expander("💡 Tips for Detection"):
-    if mode == "Template Matching":
-        st.markdown("""
-        **Template Matching**  
-        - Works best when objects are **similar in shape/appearance**.  
-        - Enable **multi-scale** if objects appear at different sizes.  
-        - Enable **rotation** if objects may be rotated.  
-        - Use **edge-based matching** for strong outlines.  
-        - Lower **threshold** → finds more matches (risk of false positives).  
-        """)
+with st.sidebar.expander("💡 Tips for Circle Detection"):
+    st.markdown("""
+    **HoughCircles**  
+    - Best for **clear, round objects** (coins, balls, buttons).  
+    - Adjust **minDist** to avoid duplicate circles.  
+    - Lower **param2** → detects more circles (but noisier).  
+    - Use **min/max radius** to focus on expected size.  
 
-        if enable_color_filter:
-            st.markdown("""
-            **Color Filtering**  
-            - Helps avoid mismatches when background is noisy.  
-            - **Lower tolerance** → stricter color match.  
-            - Useful for detecting same-shape but different-color objects.  
-            """)
-
-    elif mode == "Circle Detection":
-        if circle_mode == "HoughCircles":
-            st.markdown("""
-            **HoughCircles**  
-            - Best for **clear, round objects** (coins, balls, buttons).  
-            - Adjust **minDist** to avoid duplicate circles.  
-            - Lower **param2** → detects more circles (but noisier).  
-            - Use **min/max radius** to limit detection range.  
-            """)
-        else:
-            st.markdown("""
-            **Blob Detector**  
-            - Best for **imperfect or filled circles** (cells, blobs, spots).  
-            - Use **min/max area** to filter sizes.  
-            - Increase **circularity** if too many non-circles are detected.  
-            - Works well on noisy images or biological samples.  
-            """)
-
-        if enable_color_filter:
-            st.markdown("""
-            **Color Filtering with Circles**  
-            - Only keeps circles similar in color to selected ROI.  
-            - Good for detecting same-sized circles but different colors.  
-            """)
+    **BlobDetector**  
+    - Better for **imperfect / filled circles** or spots.  
+    - Use **area range** instead of radius.  
+    - Increase **circularity** if too many non-circles appear.  
+    - Good for noisy / biological images (cells, bubbles).  
+    """)
 
 resize_width = 800
 scales = [1.2, 1.0, 0.8, 0.6, 0.4] if multi_scale else [1.0]
@@ -118,25 +89,23 @@ if uploaded_file:
         scale_factor = 1.0
         display_img = original.copy()
 
-    # === Step 1: ROI Selection ===
     st.subheader("Step 1: (Optional) Draw ROI Box for Template / Color Filter")
-
-    background_image = Image.fromarray(display_img.astype("uint8")).convert("RGB")
-
     canvas_result = st_canvas(
         fill_color="rgba(0, 0, 0, 0)",
         stroke_width=3,
         stroke_color="#00FF00",
-        background_image=background_image,
+        background_image=Image.fromarray(display_img),
         update_streamlit=True,
         height=display_img.shape[0],
         width=display_img.shape[1],
         drawing_mode="rect",
-        key=f"canvas_{uploaded_file.name}"  # ensures ROI resets when new file is uploaded
+        key="canvas",
+        initial_drawing={"version": "4.4.0", "objects": []}
     )
 
     template = None
     if canvas_result.json_data and len(canvas_result.json_data["objects"]) > 0:
+        # Keep only the latest ROI
         rect = canvas_result.json_data["objects"][-1]
         x, y = int(rect["left"]), int(rect["top"])
         w, h = int(rect["width"]), int(rect["height"])
@@ -148,7 +117,6 @@ if uploaded_file:
         if template.size > 0:
             st.image(template, caption="Selected ROI Template", width=200)
 
-    # === Step 2: Detection ===
     st.subheader("Step 2: Object Detection")
 
     # === Detection functions ===
@@ -195,7 +163,7 @@ if uploaded_file:
                         rgb_diff = np.abs(avg_region_rgb - selected_rgb)
                         weighted_rgb_error = np.mean(rgb_diff)
 
-                        if h_diff > color_tolerance or weighted_rgb_error > 40:
+                        if h_diff > color_tolerance or weighted_rgb_error > 40:  
                             continue
 
                     found_rects.append([pt[0], pt[1], rotated.shape[1], rotated.shape[0]])
@@ -212,6 +180,7 @@ if uploaded_file:
         gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
 
         if circle_mode == "BlobDetector":
+            # --- Blob Detector Params ---
             params = cv2.SimpleBlobDetector_Params()
             params.filterByCircularity = True
             params.minCircularity = min_circularity
@@ -249,7 +218,7 @@ if uploaded_file:
             return result_img, count
 
         else:  # HoughCircles
-            gray = cv2.medianBlur(gray, 5)
+            gray = cv2.medianBlur(gray, 5)  # reduce noise
             circles = cv2.HoughCircles(
                 gray,
                 cv2.HOUGH_GRADIENT,
@@ -287,7 +256,7 @@ if uploaded_file:
         if template is None:
             st.warning("⚠️ Please draw an ROI for template matching.")
         else:
-            result, count = detect_template(original, template)
+            result, count = detect_template(original, template)  # use ORIGINAL
             st.success(f"✅ Total Objects Detected: {count}")
             st.image(cv2.resize(result, (display_img.shape[1], display_img.shape[0])), 
                      caption="Detection Result", width=800)
