@@ -99,7 +99,7 @@ if uploaded_file:
                 fill_color="rgba(0, 0, 0, 0)",
                 stroke_width=3,
                 stroke_color="#00FF00",
-                background_image=Image.fromarray(display_img), # Correctly convert numpy array to PIL Image
+                background_color="rgba(0,0,0,0)",
                 update_streamlit=True,
                 height=display_img.shape[0],
                 width=display_img.shape[1],
