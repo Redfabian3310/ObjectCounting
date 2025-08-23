@@ -95,7 +95,7 @@ if uploaded_file:
         # The key change is to ensure a valid image is passed
         # Use a check to prevent passing an empty array
         if display_img.size > 0:
-            background = Image.fromarray(display_img.astype("uint8"))
+            background = Image.fromarray(display_img)
 
             canvas_result = st_canvas(
                 fill_color="rgba(0, 0, 0, 0)",
