@@ -1,5 +1,10 @@
-streamlit
+# Streamlit version compatible with streamlit-drawable-canvas 0.9.3
+streamlit==1.28.0
+
+# Canvas library version that works with Streamlit 1.28
 streamlit-drawable-canvas==0.9.3
+
+# Core dependencies for image processing
 opencv-python-headless
 numpy
 Pillow
