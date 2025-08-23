@@ -129,9 +129,9 @@ if uploaded_file:
         height=display_img.shape[0],
         width=display_img.shape[1],
         drawing_mode="rect",
-        key="canvas",
-        initial_drawing={"version": "4.4.0", "objects": []}
+        key="canvas"
     )
+
 
 
     template = None
