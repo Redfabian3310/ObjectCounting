@@ -121,16 +121,16 @@ if uploaded_file:
 
     st.subheader("Step 1: (Optional) Draw ROI Box for Template / Color Filter")
     canvas_result = st_canvas(
-    fill_color="rgba(0, 0, 0, 0)",
-    stroke_width=3,
-    stroke_color="#00FF00",
-    background_image=Image.fromarray(display_img.astype("uint8")),
-    update_streamlit=True,
-    height=display_img.shape[0],
-    width=display_img.shape[1],
-    drawing_mode="rect",
-    key="canvas",
-    initial_drawing={"version": "4.4.0", "objects": []}
+        fill_color="rgba(0, 0, 0, 0)",
+        stroke_width=3,
+        stroke_color="#00FF00",
+        background_image=Image.fromarray(display_img.astype("uint8")),
+        update_streamlit=True,
+        height=display_img.shape[0],
+        width=display_img.shape[1],
+        drawing_mode="rect",
+        key="canvas",
+        initial_drawing={"version": "4.4.0", "objects": []}
     )
 
 
