@@ -74,34 +74,46 @@ scales = [1.2, 1.0, 0.8, 0.6, 0.4] if multi_scale else [1.0]
 
 # === Image Upload ===
 st.title("🔍 Universal Object Detection & Counting")
-
 uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
+
 if uploaded_file:
-    # Original full-resolution image
-    original = np.array(Image.open(uploaded_file).convert("RGB"))
+    try:
+        # Original full-resolution image
+        original = np.array(Image.open(uploaded_file).convert("RGB"))
 
-    # Scaled-down copy for UI (preview & ROI drawing)
-    h, w = original.shape[:2]
-    if max(h, w) > resize_width:
-        scale_factor = resize_width / max(h, w)
-        display_img = cv2.resize(original, (int(w * scale_factor), int(h * scale_factor)))
-    else:
-        scale_factor = 1.0
-        display_img = original.copy()
+        # Scaled-down copy for UI (preview & ROI drawing)
+        h, w = original.shape[:2]
+        if max(h, w) > resize_width:
+            scale_factor = resize_width / max(h, w)
+            display_img = cv2.resize(original, (int(w * scale_factor), int(h * scale_factor)))
+        else:
+            scale_factor = 1.0
+            display_img = original.copy()
 
-    st.subheader("Step 1: (Optional) Draw ROI Box for Template / Color Filter")
-    canvas_result = st_canvas(
-        fill_color="rgba(0, 0, 0, 0)",
-        stroke_width=3,
-        stroke_color="#00FF00",
-        background_image=Image.fromarray(display_img),
-        update_streamlit=True,
-        height=display_img.shape[0],
-        width=display_img.shape[1],
-        drawing_mode="rect",
-        key="canvas",
-        initial_drawing={"version": "4.4.0", "objects": []}
-    )
+        st.subheader("Step 1: (Optional) Draw ROI Box for Template / Color Filter")
+
+        # The key change is to ensure a valid image is passed
+        # Use a check to prevent passing an empty array
+        if display_img.size > 0:
+            canvas_result = st_canvas(
+                fill_color="rgba(0, 0, 0, 0)",
+                stroke_width=3,
+                stroke_color="#00FF00",
+                background_image=Image.fromarray(display_img), # Correctly convert numpy array to PIL Image
+                update_streamlit=True,
+                height=display_img.shape[0],
+                width=display_img.shape[1],
+                drawing_mode="rect",
+                key="canvas",
+                initial_drawing={"version": "4.4.0", "objects": []}
+            )
+        else:
+            st.error("Uploaded image could not be processed.")
+            st.stop()
+            
+    except Exception as e:
+        st.error(f"An error occurred: {e}")
+        st.stop()
 
     template = None
     if canvas_result.json_data and len(canvas_result.json_data["objects"]) > 0:
