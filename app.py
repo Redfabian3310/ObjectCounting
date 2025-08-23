@@ -104,19 +104,13 @@ scales = [1.2, 1.0, 0.8, 0.6, 0.4] if multi_scale else [1.0]
 # === Image Upload ===
 st.title("🔍 Universal Object Detection & Counting")
 
-# === Upload image ===
 uploaded_file = st.file_uploader("Upload an image", type=["jpg", "jpeg", "png"])
+if uploaded_file:
+    # Original full-resolution image
+    original = np.array(Image.open(uploaded_file).convert("RGB"))
 
-if uploaded_file is not None:
-    # --- Step 1: Open uploaded file with PIL (always RGB) ---
-    image = Image.open(uploaded_file).convert("RGB")
-    original = np.array(image)   # numpy array in RGB
-
-    st.image(image, caption="Uploaded Image (RGB)", use_container_width=True)
-
-    # --- Step 2: Resize for display/canvas ---
+    # Scaled-down copy for UI (preview & ROI drawing)
     h, w = original.shape[:2]
-    resize_width = 800
     if max(h, w) > resize_width:
         scale_factor = resize_width / max(h, w)
         display_img = cv2.resize(original, (int(w * scale_factor), int(h * scale_factor)))
@@ -124,34 +118,36 @@ if uploaded_file is not None:
         scale_factor = 1.0
         display_img = original.copy()
 
-    st.image(display_img, caption="Check resized image (RGB)", channels="RGB")
+    # === Step 1: ROI Selection ===
+    st.subheader("Step 1: (Optional) Draw ROI Box for Template / Color Filter")
 
-    # --- Step 3: Convert resized numpy → PIL for canvas ---
-    background_image = Image.fromarray(display_img)
-
-    # --- Step 4: ROI Canvas ---
+    rgb_img = cv2.cvtColor(display_img, cv2.COLOR_BGR2RGB)
+    background_image = Image.fromarray(rgb_img)
+    st.image(rgb_img, caption="Check background image", channels="RGB")
     canvas_result = st_canvas(
         fill_color="rgba(0, 0, 0, 0)",
         stroke_width=3,
         stroke_color="#00FF00",
         background_image=background_image,
         update_streamlit=True,
-        height=display_img.shape[0],
-        width=display_img.shape[1],
+        height=rgb_img.shape[0],
+        width=rgb_img.shape[1],
         drawing_mode="rect",
         key=f"canvas_{uploaded_file.name}"
     )
 
-    # --- Step 5: Handle ROI ---
-    if canvas_result.json_data is not None:
-        objects = canvas_result.json_data["objects"]
-        if len(objects) > 0:
-            obj = objects[-1]  # last drawn ROI
-            x, y, w_box, h_box = obj["left"], obj["top"], obj["width"], obj["height"]
-            roi = display_img[int(y):int(y+h_box), int(x):int(x+w_box)]
+    template = None
+    if canvas_result.json_data and len(canvas_result.json_data["objects"]) > 0:
+        rect = canvas_result.json_data["objects"][-1]
+        x, y = int(rect["left"]), int(rect["top"])
+        w, h = int(rect["width"]), int(rect["height"])
 
-            if roi.size > 0:
-                st.image(roi, caption="Selected ROI", channels="RGB")
+        # Map ROI back to original coordinates
+        x, y, w, h = int(x / scale_factor), int(y / scale_factor), int(w / scale_factor), int(h / scale_factor)
+
+        template = original[y:y+h, x:x+w]
+        if template.size > 0:
+            st.image(template, caption="Selected ROI Template", width=200)
 
     # === Step 2: Detection ===
     st.subheader("Step 2: Object Detection")
