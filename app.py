@@ -3,6 +3,18 @@ import cv2
 import numpy as np
 from streamlit_drawable_canvas import st_canvas
 from PIL import Image
+from io import BytesIO
+
+def to_pil_safe(img_np):
+    """Convert NumPy image to a safe PIL image for st_canvas."""
+    img_np = img_np.astype("uint8")
+    pil_img = Image.fromarray(img_np).convert("RGB")
+
+    # Save into buffer and reload → guarantees a proper PIL.Image object
+    buf = BytesIO()
+    pil_img.save(buf, format="PNG")
+    buf.seek(0)
+    return Image.open(buf)
 
 st.set_page_config(layout="wide")
 
@@ -124,15 +136,13 @@ if uploaded_file:
         fill_color="rgba(0, 0, 0, 0)",
         stroke_width=3,
         stroke_color="#00FF00",
+        background_image=to_pil_safe(display_img),  # <--- safe conversion
         update_streamlit=True,
         height=display_img.shape[0],
         width=display_img.shape[1],
         drawing_mode="rect",
         key="canvas"
     )
-
-
-
 
     template = None
     if canvas_result.json_data and len(canvas_result.json_data["objects"]) > 0:
