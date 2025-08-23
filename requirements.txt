@@ -1,5 +1,5 @@
 streamlit
 opencv-python-headless
 numpy
-pillow
-streamlit-drawable-canvas
+pillow>=10.0.0
+streamlit-drawable-canvas>=0.9.3
