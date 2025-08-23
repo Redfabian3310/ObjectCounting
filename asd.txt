@@ -1,0 +1,164 @@
+C:\rasa\orders.json
+{
+  "1001": {
+    "products": [
+      {"name": "Laptop", "price": 3500, "qty": 1},
+      {"name": "Mouse", "price": 50, "qty": 2}
+    ],
+    "total": 3600,
+    "refund": 200,
+    "status": "Shipped"
+  },
+  "1002": {
+    "products": [
+      {"name": "Headphones", "price": 200, "qty": 1},
+      {"name": "Keyboard", "price": 150, "qty": 1}
+    ],
+    "total": 350,
+    "refund": 0,
+    "status": "Delivered"
+  },
+  "1003": {
+    "products": [
+      {"name": "Smartphone", "price": 2800, "qty": 1},
+      {"name": "Screen Protector", "price": 20, "qty": 2}
+    ],
+    "total": 2840,
+    "refund": 100,
+    "status": "Processing"
+  }
+}
+
+C:\rasa\domain.yml
+version: "3.1"
+
+intents:
+  - greet
+  - goodbye
+  - ask_order_status
+  - ask_refund
+  - faq_delivery
+  - faq_payment
+  - bot_challenge
+
+entities:
+  - order_id
+
+slots:
+  order_id:
+    type: text
+    mappings:
+      - type: from_entity
+        entity: order_id
+
+responses:
+  utter_greet:
+    - text: "Hello! 👋 How can I help you today?"
+  utter_goodbye:
+    - text: "Goodbye! Thanks for shopping with us."
+  utter_iamabot:
+    - text: "I’m an AI assistant here to help with your orders."
+
+actions:
+  - action_check_order
+  - action_check_refund
+
+
+C:\rasa\data\nlu.yml
+version: "3.1"
+nlu:
+- intent: greet
+  examples: |
+    - hi
+    - hello
+    - hey
+
+- intent: goodbye
+  examples: |
+    - bye
+    - goodbye
+    - see you later
+
+- intent: ask_order_status
+  examples: |
+    - what is the status of order 1001?
+    - track my order 1002
+    - where is order 1003
+    - check order 1002
+
+- intent: ask_refund
+  examples: |
+    - how much refund for order 1001?
+    - did I get any refund for order 1002
+    - check refund for order 1003
+    - refund status of order 1001
+
+- intent: faq_delivery
+  examples: |
+    - how long does delivery take?
+    - what is the delivery time?
+    - when will my package arrive?
+
+- intent: faq_payment
+  examples: |
+    - what payment methods are supported?
+    - can I pay with credit card?
+    - do you support PayPal?
+
+- intent: bot_challenge
+  examples: |
+    - are you a bot?
+    - who are you?
+    - what are you?
+
+C:\rasa\actions\actions.py
+import json
+from rasa_sdk import Action, Tracker
+from rasa_sdk.executor import CollectingDispatcher
+
+# Load orders
+with open("orders.json") as f:
+    ORDERS = json.load(f)
+
+class ActionCheckOrder(Action):
+    def name(self):
+        return "action_check_order"
+
+    def run(self, dispatcher: CollectingDispatcher,
+            tracker: Tracker,
+            domain: dict):
+        order_id = tracker.get_slot("order_id")
+
+        if order_id and order_id in ORDERS:
+            order = ORDERS[order_id]
+            product_list = ", ".join([f"{p['qty']}x {p['name']}" for p in order["products"]])
+            dispatcher.utter_message(
+                text=f"📦 Order {order_id} contains: {product_list}. "
+                     f"Total: RM{order['total']}. Status: {order['status']}."
+            )
+        else:
+            dispatcher.utter_message(text="❌ Sorry, I couldn't find that order ID.")
+        return []
+
+class ActionCheckRefund(Action):
+    def name(self):
+        return "action_check_refund"
+
+    def run(self, dispatcher: CollectingDispatcher,
+            tracker: Tracker,
+            domain: dict):
+        order_id = tracker.get_slot("order_id")
+
+        if order_id and order_id in ORDERS:
+            refund = ORDERS[order_id]["refund"]
+            dispatcher.utter_message(
+                text=f"💰 Refund for order {order_id} is RM{refund}."
+            )
+        else:
+            dispatcher.utter_message(text="❌ Sorry, no refund found for that order ID.")
+        return []
+
+
+rasa train
+rasa run actions
+rasa shell
