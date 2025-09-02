@@ -18,8 +18,8 @@ threshold = st.sidebar.slider("Detection Threshold", 0.0, 1.0, 0.8, 0.01)
 
 multi_scale = st.sidebar.checkbox("Detect all sizes", value=True)
 allow_rotation = st.sidebar.checkbox("Detect rotated objects", value=True)
-enable_color_filter = st.sidebar.checkbox("Enable color filtering", value=False)
-color_tolerance = st.sidebar.slider("Color Tolerance (±)", 0, 50, 15, disabled=not enable_color_filter)
+enable_color_filter = st.sidebar.checkbox("Enable colour filtering", value=False)
+color_tolerance = st.sidebar.slider("Colour Tolerance (±)", 0, 50, 15, disabled=not enable_color_filter)
 
 with st.sidebar.expander("👨‍💻 Expert Mode (OpenCV settings)"):
     method_name = st.selectbox(
@@ -90,7 +90,7 @@ if uploaded_file:
             scale_factor = 1.0
             display_img = original.copy()
 
-        st.subheader("Step 1: (Optional) Draw ROI Box for Template / Color Filter")
+        st.subheader("Step 1: (Optional) Draw ROI Box for Template / Colour Filter")
 
         # The key change is to ensure a valid image is passed
         # Use a check to prevent passing an empty array
